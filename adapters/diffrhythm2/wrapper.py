@@ -28,10 +28,11 @@ def main() -> int:
     lyrics_path.write_text(normalize_lyrics(request.get("lyrics", "")), encoding="utf-8")
 
     prompt = ", ".join(x for x in [request.get("genre"), request.get("mood"), request.get("prompt")] if x)
+    style_prompt = str(Path(request["reference_audio"]).resolve()) if request.get("reference_audio") else (prompt or "Original song")
     input_jsonl = output_dir / "input.jsonl"
     input_jsonl.write_text(json.dumps({
         "song_name": "octiva",
-        "style_prompt": prompt or "Original song",
+        "style_prompt": style_prompt,
         "lyrics": str(lyrics_path.resolve()),
     }, ensure_ascii=False) + "\n", encoding="utf-8")
 
