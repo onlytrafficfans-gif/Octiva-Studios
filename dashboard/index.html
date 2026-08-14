@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Octiva Studios</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">O</span><div><strong>OCTIVA</strong><small>STUDIOS</small></div></div>
+      <nav>
+        <button class="nav active" data-view="create">CREATE</button>
+        <button class="nav" data-view="projects">PROJECTS</button>
+        <button class="nav" data-view="studio">STUDIO</button>
+        <button class="nav" data-view="library">LIBRARY</button>
+        <button class="nav" data-view="lyrics">LYRICS</button>
+        <button class="nav" data-view="stems">STEMS</button>
+        <button class="nav" data-view="vocals">VOCALS</button>
+        <button class="nav" data-view="mix">MIX</button>
+        <button class="nav" data-view="master">MASTER</button>
+        <button class="nav" data-view="engines">ENGINES</button>
+      </nav>
+      <div class="status-strip"><span id="healthDot"></span><span id="healthText">Connecting</span></div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><p class="eyebrow">LOCAL-FIRST AI MUSIC WORKSTATION</p><h1 id="viewTitle">Create</h1></div>
+        <div class="project-picker"><label>PROJECT</label><select id="projectSelect"></select><button id="newProject">＋</button></div>
+      </header>
+
+      <section id="create" class="view active">
+        <div class="hero-card glass">
+          <div class="hero-copy"><p class="eyebrow">OCTIVA CREATE</p><h2>What are we making?</h2><p>One clean interface. Multiple replaceable music engines underneath.</p></div>
+          <textarea id="prompt" placeholder="Describe your song... dark melodic R&B, cinematic, reflective, live guitar, deep drums"></textarea>
+          <div class="mode-row">
+            <button class="mode active" data-mode="song">SONG</button><button class="mode" data-mode="instrumental">INSTRUMENTAL</button>
+          </div>
+        </div>
+
+        <div class="workspace-grid">
+          <div class="glass panel lyrics-panel"><div class="panel-title"><span>LYRICS</span><span class="muted">STRUCTURED</span></div><textarea id="lyrics" placeholder="[Verse]\nWrite lyrics here...\n\n[Chorus]\n..."></textarea></div>
+          <div class="glass panel controls-panel">
+            <div class="panel-title"><span>GENERATION</span><span id="capabilityNote" class="muted"></span></div>
+            <label>ENGINE<select id="engine"><option value="auto">AUTO</option><option value="ace-step">ACE-Step</option><option value="levo2">LeVo 2</option><option value="diffrhythm2">DiffRhythm 2</option></select></label>
+            <div class="two"><label>GENRE<input id="genre" placeholder="R&B / Trap" /></label><label>MOOD<input id="mood" placeholder="Cinematic" /></label></div>
+            <div class="three"><label data-cap="bpm">BPM<input id="bpm" type="number" value="155" /></label><label data-cap="key">KEY<input id="key" value="D minor" /></label><label data-cap="duration">SECONDS<input id="duration" type="number" value="180" /></label></div>
+            <label data-cap="reference_audio">REFERENCE AUDIO<input id="reference" placeholder="Local file path (optional)" /></label>
+            <details><summary>ADVANCED</summary><label>SEED<input id="seed" type="number" placeholder="Random" /></label></details>
+            <button id="generate" class="generate">✦ CREATE</button>
+            <div id="generationStatus" class="generation-status"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="projects" class="view"><div class="glass panel"><div class="panel-title"><span>PROJECTS</span></div><div id="projectList" class="project-list"></div></div></section>
+      <section id="studio" class="view"><div class="glass studio"><div class="timeline-head"><span>ARRANGE</span><span id="studioMeta" class="muted">No generation selected</span></div><div class="timeline"><div>INTRO</div><div>VERSE</div><div>HOOK</div><div>VERSE</div><div>HOOK</div><div>OUTRO</div></div><audio id="player" controls></audio><div id="generationList" class="generation-list"></div></div></section>
+      <section id="library" class="view placeholder"></section>
+      <section id="lyrics" class="view placeholder"></section>
+      <section id="stems" class="view placeholder"></section>
+      <section id="vocals" class="view placeholder"></section>
+      <section id="mix" class="view placeholder"></section>
+      <section id="master" class="view placeholder"></section>
+      <section id="engines" class="view"><div id="engineCards" class="engine-grid"></div></section>
+    </main>
+  </div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
