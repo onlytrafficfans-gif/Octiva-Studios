@@ -16,4 +16,4 @@
 - [x] Connect the retained audit interface to verified Octiva API endpoints and preserve no-fake-success behavior.
 - [x] Add a versioned live System / Audit contract with runtime evidence, active generation, and explicit unknown states.
 - [x] Integrate the mobile companion with Octiva’s live endpoints while retaining static audit guidance only as clearly labeled fallback context.
-- [ ] Push the live-integration revision to the existing non-main GitHub review branch.
+- [x] Push the live-integration revision to the existing non-main GitHub review branch.
