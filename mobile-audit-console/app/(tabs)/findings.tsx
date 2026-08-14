@@ -1,104 +1,28 @@
 import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { SectionTitle, SeverityPill, StatusPill } from "@/components/audit-ui";
+import { SectionTitle, SeverityPill } from "@/components/audit-ui";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
-import { findings, type Finding, type Severity } from "@/lib/audit-data";
+import { useSystemAudit } from "@/lib/octiva-connection";
+import type { LiveFinding } from "@/lib/octiva-system";
 
-type Filter = "ALL" | Severity;
+type Filter = "ALL" | LiveFinding["severity"];
 const filters: Filter[] = ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"];
 
 export default function FindingsScreen() {
   const colors = useColors();
+  const { data: audit, isLoading, isError, refetch, isRefetching } = useSystemAudit();
   const [filter, setFilter] = useState<Filter>("ALL");
-  const [activeFinding, setActiveFinding] = useState<Finding | null>(null);
-  const filteredFindings = useMemo(() => findings.filter((finding) => filter === "ALL" || finding.severity === filter), [filter]);
-
-  return (
-    <ScreenContainer className="px-5" edges={["top", "left", "right"]}>
-      <FlatList
-        data={filteredFindings}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <View>
-            <Text style={[styles.kicker, { color: colors.muted }]}>RED-TEAM REGISTER</Text>
-            <Text style={[styles.title, { color: colors.text }]}>Findings</Text>
-            <Text style={[styles.intro, { color: colors.muted }]}>A finding stays open until the referenced evidence directly demonstrates the required state.</Text>
-            <View style={styles.filters}>
-              {filters.map((item) => {
-                const selected = filter === item;
-                return <Pressable key={item} onPress={() => setFilter(item)} style={({ pressed }) => [styles.filter, { backgroundColor: selected ? colors.tint : colors.surface, borderColor: selected ? colors.tint : colors.border }, pressed && styles.pressed]}><Text style={[styles.filterText, { color: selected ? "#FFFFFF" : colors.text }]}>{item}</Text></Pressable>;
-              })}
-            </View>
-            <SectionTitle eyebrow={`${filteredFindings.length} visible`} title="Prioritized evidence gaps" />
-          </View>
-        }
-        renderItem={({ item }) => (
-          <Pressable accessibilityLabel={`Open ${item.title}`} onPress={() => setActiveFinding(item)} style={({ pressed }) => [styles.row, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
-            <View style={styles.rowTop}><SeverityPill severity={item.severity} /><StatusPill label={item.status} /><IconSymbol name="chevron.right" color={colors.muted} size={20} /></View>
-            <Text style={[styles.findingTitle, { color: colors.text }]}>{item.title}</Text>
-            <Text numberOfLines={2} style={[styles.findingSummary, { color: colors.muted }]}>{item.evidence}</Text>
-            <Text style={[styles.area, { color: colors.tint }]}>{item.area}</Text>
-          </Pressable>
-        )}
-      />
-      <FindingDetail finding={activeFinding} close={() => setActiveFinding(null)} />
-    </ScreenContainer>
-  );
+  const [active, setActive] = useState<LiveFinding | null>(null);
+  const visible = useMemo(() => audit?.findings.filter((finding) => filter === "ALL" || finding.severity === filter) ?? [], [audit, filter]);
+  if (isLoading) return <ScreenContainer className="items-center justify-center"><ActivityIndicator color={colors.tint} /></ScreenContainer>;
+  if (!audit || isError) return <ScreenContainer className="items-center justify-center px-8"><Text style={[styles.empty, { color: colors.text }]}>Connect Octiva on the System tab to load live findings.</Text></ScreenContainer>;
+  return <ScreenContainer className="px-5" edges={["top", "left", "right"]}><FlatList data={visible} keyExtractor={(item) => item.id} onRefresh={refetch} refreshing={isRefetching} showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent} ListHeaderComponent={<View><Text style={[styles.kicker, { color: colors.muted }]}>LIVE SYSTEM FINDINGS</Text><Text style={[styles.title, { color: colors.text }]}>Findings</Text><Text style={[styles.intro, { color: colors.muted }]}>Findings are produced by the active Octiva adapter status and runtime-evidence record. They are not a cached audit snapshot.</Text><View style={styles.filters}>{filters.map((item) => <Pressable key={item} onPress={() => setFilter(item)} style={({ pressed }) => [styles.filter, { backgroundColor: filter === item ? colors.tint : colors.surface, borderColor: filter === item ? colors.tint : colors.border }, pressed && styles.pressed]}><Text style={[styles.filterText, { color: filter === item ? "#FFFFFF" : colors.text }]}>{item}</Text></Pressable>)}</View><SectionTitle eyebrow={`${visible.length} visible`} title="Evidence gaps" /></View>} ListEmptyComponent={<View style={[styles.noFindings, { backgroundColor: colors.surface, borderColor: colors.border }]}><IconSymbol name="checkmark.seal.fill" color="#0F766E" size={22} /><Text style={[styles.noFindingsTitle, { color: colors.text }]}>No live findings returned</Text><Text style={[styles.noFindingsCopy, { color: colors.muted }]}>The server returned no current evidence gaps for this filter.</Text></View>} renderItem={({ item }) => <Pressable onPress={() => setActive(item)} style={({ pressed }) => [styles.row, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}><View style={styles.rowTop}><SeverityPill severity={item.severity} /><Text style={[styles.area, { color: colors.tint }]}>{item.area}</Text><IconSymbol name="chevron.right" color={colors.muted} size={20} /></View><Text style={[styles.findingTitle, { color: colors.text }]}>{item.title}</Text><Text numberOfLines={2} style={[styles.summary, { color: colors.muted }]}>{item.evidence}</Text></Pressable>} /><FindingDetail finding={active} close={() => setActive(null)} /></ScreenContainer>;
 }
 
-function FindingDetail({ finding, close }: { finding: Finding | null; close: () => void }) {
-  const colors = useColors();
-  if (!finding) return null;
-  return (
-    <Modal animationType="slide" transparent visible onRequestClose={close}>
-      <View style={styles.modalBackdrop}>
-        <View style={[styles.modalCard, { backgroundColor: colors.background }]}> 
-          <View style={styles.modalHandle} />
-          <View style={styles.modalTop}><SeverityPill severity={finding.severity} /><Pressable accessibilityLabel="Close finding detail" onPress={close} style={({ pressed }) => [styles.closeButton, { backgroundColor: colors.surface }, pressed && styles.pressed]}><IconSymbol name="xmark" size={18} color={colors.text} /></Pressable></View>
-          <Text style={[styles.modalTitle, { color: colors.text }]}>{finding.title}</Text>
-          <DetailBlock label="FILE / AREA" value={finding.fileArea} />
-          <DetailBlock label="EVIDENCE" value={finding.evidence} />
-          <View style={[styles.requiredFix, { backgroundColor: "#DBEAFE" }]}><Text style={styles.fixLabel}>REQUIRED FIX</Text><Text style={styles.fixCopy}>{finding.requiredFix}</Text></View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
+function FindingDetail({ finding, close }: { finding: LiveFinding | null; close: () => void }) { const colors = useColors(); if (!finding) return null; return <Modal animationType="slide" transparent visible onRequestClose={close}><View style={styles.backdrop}><View style={[styles.modal, { backgroundColor: colors.background }]}><View style={styles.handle} /><View style={styles.modalTop}><SeverityPill severity={finding.severity} /><Pressable onPress={close} style={({ pressed }) => [styles.close, { backgroundColor: colors.surface }, pressed && styles.pressed]}><IconSymbol name="xmark" color={colors.text} size={18} /></Pressable></View><Text style={[styles.modalTitle, { color: colors.text }]}>{finding.title}</Text><Block label="AREA" value={finding.area} /><Block label="LIVE EVIDENCE" value={finding.evidence} /><View style={styles.fixBox}><Text style={styles.fixLabel}>REQUIRED FIX</Text><Text style={styles.fixCopy}>{finding.required_fix}</Text></View></View></View></Modal>; }
+function Block({ label, value }: { label: string; value: string }) { const colors = useColors(); return <View style={styles.block}><Text style={[styles.blockLabel, { color: colors.muted }]}>{label}</Text><Text style={[styles.blockValue, { color: colors.text }]}>{value}</Text></View>; }
 
-function DetailBlock({ label, value }: { label: string; value: string }) {
-  const colors = useColors();
-  return <View style={styles.detailBlock}><Text style={[styles.detailLabel, { color: colors.muted }]}>{label}</Text><Text style={[styles.detailValue, { color: colors.text }]}>{value}</Text></View>;
-}
-
-const styles = StyleSheet.create({
-  listContent: { paddingBottom: 104 },
-  kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 0.85, marginTop: 10 },
-  title: { fontSize: 31, fontWeight: "800", letterSpacing: -1.05, marginTop: 4 },
-  intro: { fontSize: 14, lineHeight: 20, marginTop: 8 },
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 17 },
-  filter: { borderRadius: 999, borderWidth: 1, minHeight: 34, paddingHorizontal: 11, paddingVertical: 8 },
-  filterText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3 },
-  row: { borderRadius: 18, borderWidth: 1, marginBottom: 10, padding: 14 },
-  rowTop: { alignItems: "center", flexDirection: "row", gap: 6 },
-  findingTitle: { fontSize: 15, fontWeight: "800", lineHeight: 21, marginTop: 11, paddingRight: 12 },
-  findingSummary: { fontSize: 12.5, lineHeight: 18, marginTop: 5 },
-  area: { fontSize: 11, fontWeight: "800", marginTop: 10 },
-  pressed: { opacity: 0.75, transform: [{ scale: 0.985 }] },
-  modalBackdrop: { backgroundColor: "rgba(9, 15, 28, 0.42)", flex: 1, justifyContent: "flex-end" },
-  modalCard: { borderTopLeftRadius: 26, borderTopRightRadius: 26, minHeight: "60%", padding: 20, paddingBottom: 36 },
-  modalHandle: { alignSelf: "center", backgroundColor: "#CBD5E1", borderRadius: 99, height: 4, marginBottom: 17, width: 38 },
-  modalTop: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  closeButton: { alignItems: "center", borderRadius: 99, height: 36, justifyContent: "center", width: 36 },
-  modalTitle: { fontSize: 23, fontWeight: "800", letterSpacing: -0.55, lineHeight: 29, marginTop: 16 },
-  detailBlock: { marginTop: 18 },
-  detailLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.7 },
-  detailValue: { fontSize: 14, fontWeight: "600", lineHeight: 20, marginTop: 5 },
-  requiredFix: { borderRadius: 15, marginTop: 20, padding: 14 },
-  fixLabel: { color: "#1D4ED8", fontSize: 10, fontWeight: "900", letterSpacing: 0.7 },
-  fixCopy: { color: "#1E3A8A", fontSize: 14, fontWeight: "700", lineHeight: 20, marginTop: 5 },
-});
+const styles = StyleSheet.create({ listContent: { paddingBottom: 104 }, kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 0.85, marginTop: 10 }, title: { fontSize: 31, fontWeight: "800", letterSpacing: -1.05, marginTop: 4 }, intro: { fontSize: 14, lineHeight: 20, marginTop: 8 }, filters: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 17 }, filter: { borderRadius: 999, borderWidth: 1, minHeight: 34, paddingHorizontal: 11, paddingVertical: 8 }, filterText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3 }, row: { borderRadius: 18, borderWidth: 1, marginBottom: 10, padding: 14 }, rowTop: { alignItems: "center", flexDirection: "row", gap: 7 }, area: { flex: 1, fontSize: 11, fontWeight: "800" }, findingTitle: { fontSize: 15, fontWeight: "800", lineHeight: 21, marginTop: 11, paddingRight: 12 }, summary: { fontSize: 12.5, lineHeight: 18, marginTop: 5 }, pressed: { opacity: 0.75, transform: [{ scale: 0.985 }] }, empty: { fontSize: 15, fontWeight: "700", lineHeight: 22, textAlign: "center" }, noFindings: { alignItems: "center", borderRadius: 17, borderWidth: 1, padding: 22 }, noFindingsTitle: { fontSize: 15, fontWeight: "800", marginTop: 9 }, noFindingsCopy: { fontSize: 12, lineHeight: 18, marginTop: 3, textAlign: "center" }, backdrop: { backgroundColor: "rgba(9, 15, 28, 0.42)", flex: 1, justifyContent: "flex-end" }, modal: { borderTopLeftRadius: 26, borderTopRightRadius: 26, minHeight: "60%", padding: 20, paddingBottom: 36 }, handle: { alignSelf: "center", backgroundColor: "#CBD5E1", borderRadius: 99, height: 4, marginBottom: 17, width: 38 }, modalTop: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, close: { alignItems: "center", borderRadius: 99, height: 36, justifyContent: "center", width: 36 }, modalTitle: { fontSize: 23, fontWeight: "800", letterSpacing: -0.55, lineHeight: 29, marginTop: 16 }, block: { marginTop: 18 }, blockLabel: { fontSize: 10, fontWeight: "800", letterSpacing: 0.7 }, blockValue: { fontSize: 14, fontWeight: "600", lineHeight: 20, marginTop: 5 }, fixBox: { backgroundColor: "#DBEAFE", borderRadius: 15, marginTop: 20, padding: 14 }, fixLabel: { color: "#1D4ED8", fontSize: 10, fontWeight: "900", letterSpacing: 0.7 }, fixCopy: { color: "#1E3A8A", fontSize: 14, fontWeight: "700", lineHeight: 20, marginTop: 5 } });

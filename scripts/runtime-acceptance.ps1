@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Stop'
 $base = 'http://127.0.0.1:8787'
 $report = [ordered]@{
-  timestamp = (Get-Date).ToString('o')
+  schema_version = '1.0'
+  generated_at = (Get-Date).ToString('o')
   octiva = 'PENDING'
   engines = [ordered]@{}
   persistence = 'PENDING'
@@ -71,7 +72,9 @@ try {
   $report.persistence = "FAIL: $($_.Exception.Message)"
 }
 
-$out = Join-Path (Split-Path $PSScriptRoot -Parent) 'docs\RUNTIME_ACCEPTANCE_RESULTS.json'
+$runtimeDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'workspace\system'
+New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+$out = Join-Path $runtimeDir 'runtime-results.json'
 $report | ConvertTo-Json -Depth 10 | Set-Content -Encoding UTF8 $out
 $report | ConvertTo-Json -Depth 10
 Write-Host "Runtime acceptance report written to $out" -ForegroundColor Green

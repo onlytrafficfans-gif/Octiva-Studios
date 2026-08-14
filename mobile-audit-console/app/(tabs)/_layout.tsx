@@ -31,7 +31,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Audit",
+          title: "System",
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
@@ -45,7 +45,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="findings"
         options={{
-          title: "Findings",
+          title: "Audit",
           tabBarIcon: ({ color }) => <IconSymbol size={25} name="exclamationmark.triangle.fill" color={color} />,
         }}
       />

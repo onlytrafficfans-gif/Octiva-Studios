@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { useColors } from "@/hooks/use-colors";
-import type { CapabilityState, ProofState, Severity } from "@/lib/audit-data";
+type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 
 type Tone = "critical" | "warning" | "positive" | "info" | "neutral";
 
@@ -15,9 +15,9 @@ const toneMap: Record<Tone, { light: string; dark: string; textLight: string; te
 };
 
 export function statusTone(value: string): Tone {
-  if (["CRITICAL", "BLOCKED", "NOT READY", "UNSUPPORTED"].includes(value)) return "critical";
-  if (["HIGH", "UNPROVEN", "UNKNOWN", "PARTIAL"].includes(value)) return "warning";
-  if (["VERIFIED", "SUPPORTED", "FIXED", "WORKING"].includes(value)) return "positive";
+  if (["CRITICAL", "BLOCKED", "NOT READY", "UNSUPPORTED", "OFFLINE", "MISSING_MODEL", "MISSING_DEPENDENCY", "INSUFFICIENT_VRAM", "UNSUPPORTED_HARDWARE"].includes(value)) return "critical";
+  if (["HIGH", "UNPROVEN", "UNKNOWN", "PARTIAL", "UNAVAILABLE", "LOADING", "GENERATING"].includes(value)) return "warning";
+  if (["VERIFIED", "SUPPORTED", "FIXED", "WORKING", "READY", "RUNTIME_READY", "AVAILABLE"].includes(value)) return "positive";
   if (["DOCUMENTED", "MEDIUM"].includes(value)) return "info";
   return "neutral";
 }
@@ -39,7 +39,7 @@ export function SeverityPill({ severity }: { severity: Severity }) {
   return <StatusPill label={severity} />;
 }
 
-export function ProofPill({ state }: { state: ProofState | CapabilityState }) {
+export function ProofPill({ state }: { state: string }) {
   return <StatusPill label={state} />;
 }
 

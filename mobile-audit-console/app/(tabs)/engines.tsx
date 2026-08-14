@@ -1,106 +1,34 @@
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useState } from "react";
 
-import { ProofPill, SectionTitle, StatusPill } from "@/components/audit-ui";
+import { SectionTitle, StatusPill } from "@/components/audit-ui";
 import { ScreenContainer } from "@/components/screen-container";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useColors } from "@/hooks/use-colors";
-import { capabilities, engines, type Engine } from "@/lib/audit-data";
-
-function EngineCard({ engine, isOpen, onPress }: { engine: Engine; isOpen: boolean; onPress: () => void }) {
-  const colors = useColors();
-  const engineCapabilities = capabilities.filter((capability) => capability[engine.id] === "SUPPORTED");
-  return (
-    <Pressable
-      accessibilityLabel={`View ${engine.name} audit evidence`}
-      onPress={onPress}
-      style={({ pressed }) => [styles.engineCard, { backgroundColor: colors.surface, borderColor: isOpen ? engine.color : colors.border }, pressed && styles.pressed]}
-    >
-      <View style={styles.engineHeader}>
-        <View style={[styles.engineMark, { backgroundColor: engine.color }]}><Text style={styles.engineMarkText}>{engine.shortName}</Text></View>
-        <View style={styles.engineNameWrap}>
-          <Text style={[styles.engineName, { color: colors.text }]}>{engine.name}</Text>
-          <Text numberOfLines={1} style={[styles.engineSub, { color: colors.muted }]}>{engine.interface}</Text>
-        </View>
-        <IconSymbol name="chevron.right" color={colors.muted} size={22} />
-      </View>
-      <View style={styles.statusRow}><StatusPill label={engine.runtimeStatus} /><ProofPill state={engine.docStatus} /></View>
-      {isOpen ? (
-        <View style={[styles.detailBox, { borderTopColor: colors.border }]}>
-          <Text style={[styles.detailTitle, { color: colors.text }]}>Evidence record</Text>
-          <Text style={[styles.detailCopy, { color: colors.muted }]}>{engine.proofNote}</Text>
-          <View style={styles.factGrid}>
-            <Fact label="UPSTREAM" value={engine.upstream} />
-            <Fact label="COMMIT" value={engine.commit} />
-            <Fact label="LICENSE" value={engine.license} />
-            <Fact label="HARDWARE" value={engine.hardware} />
-          </View>
-          <Text style={[styles.detailTitle, { color: colors.text, marginTop: 16 }]}>Verified capabilities</Text>
-          <View style={styles.capabilityWrap}>
-            {engineCapabilities.slice(0, 6).map((capability) => <Text key={capability.id} style={[styles.capabilityChip, { color: engine.color, backgroundColor: `${engine.color}18` }]}>{capability.label}</Text>)}
-          </View>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  const colors = useColors();
-  return <View style={styles.fact}><Text style={[styles.factLabel, { color: colors.muted }]}>{label}</Text><Text style={[styles.factValue, { color: colors.text }]}>{value}</Text></View>;
-}
+import { useSystemAudit } from "@/lib/octiva-connection";
+import { engineColor, supportedCapabilities, type LiveEngine } from "@/lib/octiva-system";
 
 export default function EnginesScreen() {
   const colors = useColors();
-  const [selectedId, setSelectedId] = useState<string>("ace");
-  return (
-    <ScreenContainer className="px-5" edges={["top", "left", "right"]}>
-      <FlatList
-        data={engines}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View>
-            <Text style={[styles.kicker, { color: colors.muted }]}>UPSTREAM + ADAPTER EVIDENCE</Text>
-            <Text style={[styles.title, { color: colors.text }]}>Engine verification</Text>
-            <Text style={[styles.intro, { color: colors.muted }]}>Read the proof state, then inspect the capability boundaries before allowing a claim into the product.</Text>
-            <SectionTitle eyebrow="Runtime gate" title="All engines remain blocked" />
-            <View style={[styles.gateCallout, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <IconSymbol name="exclamationmark.triangle.fill" color="#B91C1C" size={19} />
-              <Text style={[styles.gateText, { color: colors.text }]}>Adapter code is not runtime evidence. Each engine needs an artifact that decodes and plays from the target machine.</Text>
-            </View>
-          </View>
-        }
-        renderItem={({ item }) => <EngineCard engine={item} isOpen={item.id === selectedId} onPress={() => setSelectedId(item.id)} />}
-      />
-    </ScreenContainer>
-  );
+  const { data: audit, isLoading, isError, refetch, isRefetching } = useSystemAudit();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  if (isLoading) return <Loading label="Reading live engine status…" />;
+  if (!audit || isError) return <Unavailable label="Connect Octiva on the System tab to inspect live engine data." />;
+
+  return <ScreenContainer className="px-5" edges={["top", "left", "right"]}><FlatList data={audit.engines} keyExtractor={(item) => item.id} showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent} onRefresh={refetch} refreshing={isRefetching} ListHeaderComponent={<View><Text style={[styles.kicker, { color: colors.muted }]}>LIVE ADAPTER + RUNTIME EVIDENCE</Text><Text style={[styles.title, { color: colors.text }]}>Engines</Text><Text style={[styles.intro, { color: colors.muted }]}>Every field below is returned by Octiva’s current System / Audit contract. A live READY state is separate from playable-audio proof.</Text><SectionTitle eyebrow="Tap an engine" title="Evidence records" /></View>} renderItem={({ item }) => <EngineCard engine={item} isOpen={selectedId === item.id} onPress={() => setSelectedId(selectedId === item.id ? null : item.id)} />} /></ScreenContainer>;
 }
 
+function EngineCard({ engine, isOpen, onPress }: { engine: LiveEngine; isOpen: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const color = engineColor(engine.id);
+  const capabilities = supportedCapabilities(engine.capabilities);
+  return <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: isOpen ? color : colors.border }, pressed && styles.pressed]}><View style={styles.cardTop}><View style={[styles.engineMark, { backgroundColor: color }]}><Text style={styles.engineMarkText}>{engine.name.slice(0, 3).toUpperCase()}</Text></View><View style={styles.nameWrap}><Text style={[styles.name, { color: colors.text }]}>{engine.name}</Text><Text style={[styles.sub, { color: colors.muted }]}>{engine.backend ? "Local backend configured" : "Backend path unavailable"}</Text></View><IconSymbol name="chevron.right" color={colors.muted} size={20} /></View><View style={styles.pills}><StatusPill label={engine.state} /><StatusPill label={engine.runtime_evidence.state} /></View>{isOpen ? <View style={[styles.detail, { borderTopColor: colors.border }]}><Detail label="LIVE BLOCKER" value={engine.blocker ?? "No live blocker returned."} /><Detail label="RUNTIME EVIDENCE" value={engine.runtime_evidence.state === "VERIFIED" ? `Verified generation ${engine.runtime_evidence.generation_id ?? "unknown"} · ${engine.runtime_evidence.bytes ?? "unknown"} bytes` : "No verified playable-audio record is currently available."} /><Detail label="CHECKPOINT" value={engine.checkpoint ?? "Unavailable from the current adapter."} /><Detail label="HARDWARE" value={engine.vram_requirement ?? "Unavailable from the current adapter."} /><Text style={[styles.capLabel, { color: colors.muted }]}>LIVE CAPABILITIES</Text><View style={styles.capabilities}>{capabilities.length ? capabilities.map((capability) => <Text key={capability} style={[styles.capability, { color, backgroundColor: `${color}18` }]}>{capability}</Text>) : <Text style={[styles.sub, { color: colors.muted }]}>No capabilities were returned.</Text>}</View></View> : null}</Pressable>;
+}
+
+function Detail({ label, value }: { label: string; value: string }) { const colors = useColors(); return <View style={styles.detailItem}><Text style={[styles.detailLabel, { color: colors.muted }]}>{label}</Text><Text style={[styles.detailValue, { color: colors.text }]}>{value}</Text></View>; }
+function Loading({ label }: { label: string }) { const colors = useColors(); return <ScreenContainer className="items-center justify-center"><ActivityIndicator color={colors.tint} /><Text style={[styles.loading, { color: colors.muted }]}>{label}</Text></ScreenContainer>; }
+function Unavailable({ label }: { label: string }) { const colors = useColors(); return <ScreenContainer className="items-center justify-center px-8"><IconSymbol name="wifi.exclamationmark" size={30} color={colors.warning} /><Text style={[styles.unavailable, { color: colors.text }]}>{label}</Text></ScreenContainer>; }
+
 const styles = StyleSheet.create({
-  listContent: { paddingBottom: 104 },
-  kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 0.85, marginTop: 10 },
-  title: { fontSize: 31, fontWeight: "800", letterSpacing: -1.05, marginTop: 4 },
-  intro: { fontSize: 14, lineHeight: 20, marginTop: 8 },
-  gateCallout: { alignItems: "flex-start", borderRadius: 15, borderWidth: 1, flexDirection: "row", gap: 10, marginBottom: 18, padding: 14 },
-  gateText: { flex: 1, fontSize: 13, fontWeight: "600", lineHeight: 19 },
-  engineCard: { borderRadius: 18, borderWidth: 1, marginBottom: 12, overflow: "hidden", padding: 15 },
-  engineHeader: { alignItems: "center", flexDirection: "row" },
-  engineMark: { alignItems: "center", borderRadius: 11, height: 42, justifyContent: "center", marginRight: 11, width: 42 },
-  engineMarkText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
-  engineNameWrap: { flex: 1 },
-  engineName: { fontSize: 16, fontWeight: "800" },
-  engineSub: { fontSize: 12, marginTop: 3 },
-  statusRow: { flexDirection: "row", gap: 7, marginLeft: 53, marginTop: 10 },
-  detailBox: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 14 },
-  detailTitle: { fontSize: 13, fontWeight: "800" },
-  detailCopy: { fontSize: 13, lineHeight: 19, marginTop: 5 },
-  factGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
-  fact: { flexGrow: 1, minWidth: "46%" },
-  factLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 0.65 },
-  factValue: { fontSize: 12, fontWeight: "600", lineHeight: 17, marginTop: 3 },
-  capabilityWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
-  capabilityChip: { borderRadius: 7, fontSize: 11, fontWeight: "700", overflow: "hidden", paddingHorizontal: 7, paddingVertical: 5 },
-  pressed: { opacity: 0.78, transform: [{ scale: 0.985 }] },
+  listContent: { paddingBottom: 104 }, kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 0.85, marginTop: 10 }, title: { fontSize: 31, fontWeight: "800", letterSpacing: -1.05, marginTop: 4 }, intro: { fontSize: 14, lineHeight: 20, marginTop: 8 }, card: { borderRadius: 18, borderWidth: 1, marginBottom: 12, padding: 15 }, cardTop: { alignItems: "center", flexDirection: "row" }, engineMark: { alignItems: "center", borderRadius: 11, height: 42, justifyContent: "center", marginRight: 11, width: 42 }, engineMarkText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" }, nameWrap: { flex: 1 }, name: { fontSize: 16, fontWeight: "800" }, sub: { fontSize: 12, lineHeight: 17, marginTop: 3 }, pills: { flexDirection: "row", gap: 7, marginLeft: 53, marginTop: 10 }, detail: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 14, paddingTop: 4 }, detailItem: { marginTop: 11 }, detailLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 0.65 }, detailValue: { fontSize: 12.5, fontWeight: "600", lineHeight: 18, marginTop: 3 }, capLabel: { fontSize: 9, fontWeight: "800", letterSpacing: 0.65, marginTop: 15 }, capabilities: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 7 }, capability: { borderRadius: 7, fontSize: 11, fontWeight: "700", overflow: "hidden", paddingHorizontal: 7, paddingVertical: 5 }, pressed: { opacity: 0.75, transform: [{ scale: 0.985 }] }, loading: { fontSize: 14, fontWeight: "700", marginTop: 12 }, unavailable: { fontSize: 15, fontWeight: "700", lineHeight: 22, marginTop: 13, textAlign: "center" },
 });

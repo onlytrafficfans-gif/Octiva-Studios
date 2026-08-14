@@ -10,6 +10,7 @@ from .engines import ENGINES
 from .models import GenerationRequest, Project
 from .projects import ProjectStore
 from .router import AutoRouter
+from .system_status import build_status, build_system_audit, engine_evidence, load_runtime_results
 
 app = FastAPI(title="Octiva Studios", version="0.1.0")
 store = ProjectStore()
@@ -24,6 +25,36 @@ def health() -> dict[str, object]:
 @app.get("/api/engines")
 def engines():
     return [engine.status() for engine in ENGINES.values()]
+
+
+@app.get("/api/system/audit")
+@app.get("/api/audit")
+def system_audit():
+    runtime_report, report_available = load_runtime_results()
+    return build_system_audit(
+        [engine.status() for engine in ENGINES.values()],
+        store.list(),
+        runtime_report,
+        report_available,
+        build_status().get("commit"),
+    )
+
+
+@app.get("/api/runtime-results")
+def runtime_results():
+    report, available = load_runtime_results()
+    engine_records = report.get("engines") if isinstance(report.get("engines"), dict) else {}
+    return {
+        "state": "AVAILABLE" if available else "UNAVAILABLE",
+        "generated_at": report.get("generated_at") or report.get("timestamp"),
+        "octiva": report.get("octiva"),
+        "engines": {engine_id: engine_evidence(engine_id, report) for engine_id in engine_records},
+    }
+
+
+@app.get("/api/build-status")
+def api_build_status():
+    return build_status()
 
 
 @app.get("/api/projects")
