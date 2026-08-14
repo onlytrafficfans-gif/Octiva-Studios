@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+
+# Local model/cache data
+models/
+weights/
+checkpoints/
+.cache/
+.huggingface/
+
+# Generated audio and project workspaces
+test-output/*
+!test-output/.gitkeep
+workspace/*
+!workspace/.gitkeep
+
+# Environment/secrets
+.env
+.env.*
+!.env.example
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
