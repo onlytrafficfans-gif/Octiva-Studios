@@ -1,0 +1,28 @@
+name: Octiva CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Octiva runtime
+        run: pip install -r requirements.txt
+      - name: Compile Python
+        run: python -m compileall -q octiva_api adapters tests
+      - name: Run core tests
+        run: python -m unittest discover -s tests -v
+      - name: Verify no committed generated audio/model weights
+        shell: bash
+        run: |
+          if find . -type f \( -name '*.ckpt' -o -name '*.safetensors' -o -name '*.pt' -o -name '*.pth' -o -name '*.wav' -o -name '*.mp3' \) | grep -q .; then
+            echo 'Generated audio or model weights must not be committed.'
+            exit 1
+          fi
