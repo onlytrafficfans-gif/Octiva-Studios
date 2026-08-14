@@ -81,7 +81,11 @@ def audio(project_id: str, engine_id: str, filename: str):
     return FileResponse(path)
 
 
-DASHBOARD = Path(__file__).resolve().parents[1] / "dashboard"
+ROOT = Path(__file__).resolve().parents[1]
+DASHBOARD = ROOT / "dashboard"
+THEME = ROOT / "shared-theme"
+if THEME.exists():
+    app.mount("/theme", StaticFiles(directory=THEME), name="theme")
 if DASHBOARD.exists():
     app.mount("/assets", StaticFiles(directory=DASHBOARD), name="assets")
 
