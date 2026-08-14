@@ -73,10 +73,18 @@ def generate(request: GenerationRequest):
     return result
 
 
-@app.get("/api/audio/{project_id}/{engine_id}/{filename}")
-def audio(project_id: str, engine_id: str, filename: str):
-    path = Path("workspace") / "projects" / project_id / "generations" / engine_id / filename
-    if not path.exists() or not path.is_file():
+@app.get("/api/audio/{project_id}/{generation_id}")
+def audio(project_id: str, generation_id: str):
+    try:
+        project = store.get(project_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "Project not found")
+    generation = next((g for g in project.generations if g.id == generation_id), None)
+    if generation is None:
+        raise HTTPException(404, "Generation not found")
+    path = Path(generation.audio_path).resolve()
+    project_root = (Path("workspace") / "projects" / project_id).resolve()
+    if project_root not in path.parents or not path.exists() or not path.is_file():
         raise HTTPException(404, "Audio not found")
     return FileResponse(path)
 
