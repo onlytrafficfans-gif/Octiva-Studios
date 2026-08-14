@@ -7,6 +7,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import requests
 
@@ -111,13 +112,12 @@ class CommandEngineAdapter(EngineAdapter):
         if status.state != "READY":
             raise RuntimeError(status.blocker or f"{self.name} is not ready")
 
-        run_dir = WORKSPACE_ROOT / "projects" / request.project_id / "generations" / self.id
-        run_dir.mkdir(parents=True, exist_ok=True)
+        generation_id = uuid4().hex
+        run_dir = WORKSPACE_ROOT / "projects" / request.project_id / "generations" / self.id / generation_id
+        run_dir.mkdir(parents=True, exist_ok=False)
         request_path = run_dir / "request.json"
         result_path = run_dir / "result.json"
         request_path.write_text(request.model_dump_json(indent=2), encoding="utf-8")
-        if result_path.exists():
-            result_path.unlink()
 
         command = os.environ[self.command_env]
         env = os.environ.copy()
@@ -154,9 +154,10 @@ class CommandEngineAdapter(EngineAdapter):
         if audio_path.resolve() != copied.resolve():
             shutil.copy2(audio_path, copied)
         return GenerationResult(
+            id=generation_id,
             project_id=request.project_id,
             engine=self.id,
-            audio_path=str(copied),
+            audio_path=str(copied.resolve()),
             metadata={k: v for k, v in payload.items() if k != "audio_path"},
         )
 
