@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+import requests
+
 from .models import EngineCapabilities, EngineStatus, GenerationRequest, GenerationResult, WORKSPACE_ROOT
 
 
@@ -23,12 +25,7 @@ class EngineAdapter(ABC):
 
 
 class CommandEngineAdapter(EngineAdapter):
-    """Runs a configured native engine command without pretending unsupported features exist.
-
-    Each engine integration uses environment variables for its checkout, checkpoint and command.
-    The command receives a JSON request file and output directory. The native wrapper must write
-    result.json containing at minimum {"audio_path": "..."}. Missing configuration is BLOCKED.
-    """
+    """Run a verified native wrapper command and reject missing prerequisites/output."""
 
     def __init__(
         self,
@@ -40,6 +37,10 @@ class CommandEngineAdapter(EngineAdapter):
         checkpoint_env: str,
         capabilities: EngineCapabilities,
         vram_requirement: str,
+        required_envs: tuple[str, ...] = (),
+        required_executables: tuple[str, ...] = (),
+        health_url_env: str | None = None,
+        health_path: str = "/health",
     ) -> None:
         self.id = engine_id
         self.name = name
@@ -48,6 +49,10 @@ class CommandEngineAdapter(EngineAdapter):
         self.checkpoint_env = checkpoint_env
         self.capabilities = capabilities
         self.vram_requirement = vram_requirement
+        self.required_envs = required_envs
+        self.required_executables = required_executables
+        self.health_url_env = health_url_env
+        self.health_path = health_path
 
     @property
     def repo(self) -> Path | None:
@@ -60,12 +65,36 @@ class CommandEngineAdapter(EngineAdapter):
         checkpoint = os.getenv(self.checkpoint_env)
         blocker = None
         state = "READY"
-        if repo is None or not repo.exists():
+
+        if repo is None or not repo.exists() or not (repo / ".git").exists():
             state = "MISSING_DEPENDENCY"
-            blocker = f"Set {self.repo_env} to a verified local checkout."
+            blocker = f"Set {self.repo_env} to a verified local Git checkout."
         elif not command:
             state = "BLOCKED"
             blocker = f"Set {self.command_env} to the verified native wrapper command."
+        else:
+            missing_envs = [key for key in self.required_envs if not os.getenv(key)]
+            missing_bins = [name for name in self.required_executables if shutil.which(name) is None]
+            if missing_envs:
+                state = "MISSING_MODEL"
+                blocker = "Missing required configuration: " + ", ".join(missing_envs)
+            elif missing_bins:
+                state = "MISSING_DEPENDENCY"
+                blocker = "Missing executable(s): " + ", ".join(missing_bins)
+            elif self.health_url_env:
+                base = os.getenv(self.health_url_env, "").rstrip("/")
+                if not base:
+                    state = "OFFLINE"
+                    blocker = f"{self.health_url_env} is not configured."
+                else:
+                    try:
+                        response = requests.get(f"{base}{self.health_path}", timeout=2)
+                        if response.status_code >= 400:
+                            raise RuntimeError(f"HTTP {response.status_code}")
+                    except Exception as exc:
+                        state = "OFFLINE"
+                        blocker = f"Native service health check failed at {base}{self.health_path}: {exc}"
+
         return EngineStatus(
             id=self.id,
             name=self.name,
@@ -87,6 +116,8 @@ class CommandEngineAdapter(EngineAdapter):
         request_path = run_dir / "request.json"
         result_path = run_dir / "result.json"
         request_path.write_text(request.model_dump_json(indent=2), encoding="utf-8")
+        if result_path.exists():
+            result_path.unlink()
 
         command = os.environ[self.command_env]
         env = os.environ.copy()
@@ -111,6 +142,8 @@ class CommandEngineAdapter(EngineAdapter):
             raise RuntimeError(f"{self.name} wrapper did not create {result_path}")
 
         payload: dict[str, Any] = json.loads(result_path.read_text(encoding="utf-8"))
+        if "audio_path" not in payload:
+            raise RuntimeError(f"{self.name} wrapper result lacks audio_path")
         audio_path = Path(payload["audio_path"])
         if not audio_path.is_absolute():
             audio_path = (self.repo / audio_path).resolve()
@@ -118,7 +151,7 @@ class CommandEngineAdapter(EngineAdapter):
             raise RuntimeError(f"{self.name} reported audio that does not exist or is empty: {audio_path}")
 
         copied = run_dir / audio_path.name
-        if audio_path != copied:
+        if audio_path.resolve() != copied.resolve():
             shutil.copy2(audio_path, copied)
         return GenerationResult(
             project_id=request.project_id,
@@ -134,6 +167,7 @@ ACE = CommandEngineAdapter(
     repo_env="OCTIVA_ACE_REPO",
     command_env="OCTIVA_ACE_COMMAND",
     checkpoint_env="OCTIVA_ACE_CHECKPOINT",
+    health_url_env="OCTIVA_ACE_API",
     vram_requirement="2B: <4GB possible; XL: >=12GB with offload/quantization per upstream docs",
     capabilities=EngineCapabilities(
         generate_song=True, generate_instrumental=True, continue_song=True, remix_song=True,
@@ -148,9 +182,11 @@ LEVO = CommandEngineAdapter(
     repo_env="OCTIVA_LEVO_REPO",
     command_env="OCTIVA_LEVO_COMMAND",
     checkpoint_env="OCTIVA_LEVO_CHECKPOINT",
+    required_envs=("OCTIVA_LEVO_CKPT_PATH",),
+    required_executables=("sh",),
     vram_requirement="v2-large: 22GB without prompt audio / 28GB with prompt audio per upstream README",
     capabilities=EngineCapabilities(
-        generate_song=True, reference_audio=True, duration=True, lyrics=True,
+        generate_song=True, generate_instrumental=True, reference_audio=True, duration=True, lyrics=True,
     ),
 )
 
@@ -160,8 +196,9 @@ DIFFRHYTHM = CommandEngineAdapter(
     repo_env="OCTIVA_DIFFRHYTHM_REPO",
     command_env="OCTIVA_DIFFRHYTHM_COMMAND",
     checkpoint_env="OCTIVA_DIFFRHYTHM_CHECKPOINT",
+    required_executables=("espeak-ng",),
     vram_requirement="Verify against current upstream checkpoint before runtime acceptance",
-    capabilities=EngineCapabilities(generate_song=True, duration=True, lyrics=True),
+    capabilities=EngineCapabilities(generate_song=True, reference_audio=True, lyrics=True),
 )
 
 ENGINES: dict[str, EngineAdapter] = {e.id: e for e in (ACE, LEVO, DIFFRHYTHM)}
