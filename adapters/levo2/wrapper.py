@@ -8,7 +8,6 @@ from pathlib import Path
 
 
 def normalize_sections(text: str) -> str:
-    # LeVo expects sectioned lyrics such as [Verse] / [Chorus]. Preserve user text.
     return text.strip()
 
 
@@ -25,14 +24,25 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     input_path = output_dir / "input.jsonl"
     description = ", ".join(x for x in [request.get("genre"), request.get("mood"), request.get("prompt")] if x)
-    input_path.write_text(json.dumps({
+    native = {
         "idx": "octiva",
         "gt_lyric": normalize_sections(request.get("lyrics", "")),
-        "descriptions": description,
-    }, ensure_ascii=False) + "\n", encoding="utf-8")
+    }
+    if request.get("reference_audio"):
+        native["prompt_audio_path"] = str(Path(request["reference_audio"]).resolve())
+    elif description:
+        native["descriptions"] = description
+    input_path.write_text(json.dumps(native, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    # Upstream documents: sh generate.sh ckpt_path lyrics.jsonl output_path
+    # Upstream documents: sh generate.sh ckpt_path lyrics.jsonl output_path [flags]
     command = ["sh", "generate.sh", str(Path(ckpt).resolve()), str(input_path.resolve()), str(output_dir.resolve())]
+    if request.get("instrumental"):
+        command.append("--bgm")
+    if os.getenv("OCTIVA_LEVO_LOW_MEM", "0") == "1":
+        command.append("--low_mem")
+    if os.getenv("OCTIVA_LEVO_DISABLE_FLASH_ATTN", "0") == "1":
+        command.append("--not_use_flash_attn")
+
     completed = subprocess.run(command, cwd=repo, capture_output=True, text=True)
     (output_dir / "native.stdout.log").write_text(completed.stdout or "", encoding="utf-8")
     (output_dir / "native.stderr.log").write_text(completed.stderr or "", encoding="utf-8")
@@ -51,6 +61,7 @@ def main() -> int:
     result_path.write_text(json.dumps({
         "audio_path": str(candidates[0].resolve()),
         "native_input": str(input_path.resolve()),
+        "native_command": command,
     }, indent=2), encoding="utf-8")
     return 0
 
