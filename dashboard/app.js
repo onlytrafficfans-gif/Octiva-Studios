@@ -74,12 +74,12 @@ function renderProjects(){
   document.querySelectorAll('.project-item').forEach(b=>b.addEventListener('click',async()=>{await loadProject(b.dataset.id);setView('create')}));
 }
 
-function audioUrl(g){ const file = g.audio_path.split(/[\\/]/).pop(); return `/api/audio/${encodeURIComponent(g.project_id)}/${encodeURIComponent(g.engine)}/${encodeURIComponent(file)}`; }
+function audioUrl(g){ return `/api/audio/${encodeURIComponent(g.project_id)}/${encodeURIComponent(g.id)}`; }
 function renderStudio(){
   if(!state.current){ $('generationList').innerHTML='<div class="muted">Create a project first.</div>'; return; }
   const gs = state.current.generations || [];
   $('studioMeta').textContent = `${state.current.name} • ${gs.length} generation${gs.length===1?'':'s'}`;
-  $('generationList').innerHTML = gs.length ? [...gs].reverse().map(g=>`<button class="generation-item" data-src="${audioUrl(g)}"><span><strong>${esc(g.engine)}</strong><br><small class="muted">${esc(g.created_at)}</small></span><span>PLAY ▶</span></button>`).join('') : '<div class="muted">No verified audio generations yet.</div>';
+  $('generationList').innerHTML = gs.length ? [...gs].reverse().map(g=>`<button class="generation-item" data-src="${audioUrl(g)}"><span><strong>${esc(g.engine)}</strong><br><small class="muted">${esc(g.created_at)} • ${esc(g.id.slice(0,8))}</small></span><span>PLAY ▶</span></button>`).join('') : '<div class="muted">No verified audio generations yet.</div>';
   document.querySelectorAll('.generation-item').forEach(b=>b.addEventListener('click',()=>{ $('player').src=b.dataset.src; $('player').play(); }));
 }
 
