@@ -1,0 +1,32 @@
+{
+  "product": "Octiva Studios",
+  "engines": [
+    {
+      "id": "ace-step",
+      "name": "ACE-Step 1.5",
+      "upstream": "https://github.com/ace-step/ACE-Step-1.5",
+      "role": "primary",
+      "status": "NOT_TESTED"
+    },
+    {
+      "id": "levo2",
+      "name": "LeVo 2 / SongGeneration 2",
+      "upstream": "https://github.com/tencent-ailab/SongGeneration",
+      "role": "alternate",
+      "status": "NOT_TESTED"
+    },
+    {
+      "id": "diffrhythm2",
+      "name": "DiffRhythm 2",
+      "upstream": "https://github.com/ASLP-lab/DiffRhythm2",
+      "role": "alternate",
+      "status": "NOT_TESTED"
+    }
+  ],
+  "rules": {
+    "keep_upstream_repos_isolated": true,
+    "require_real_audio_before_working_status": true,
+    "allow_mock_generation": false,
+    "capabilities_must_be_detected": true
+  }
+}
