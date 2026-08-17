@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .engines import ENGINES
-from .models import GenerationRequest, Project
+from .models import GenerationRequest, Project, WORKSPACE_ROOT
 from .projects import ProjectStore
 from .router import AutoRouter
 
@@ -82,9 +82,16 @@ def audio(project_id: str, generation_id: str):
     generation = next((g for g in project.generations if g.id == generation_id), None)
     if generation is None:
         raise HTTPException(404, "Generation not found")
-    path = Path(generation.audio_path).resolve()
-    project_root = (Path("workspace") / "projects" / project_id).resolve()
-    if project_root not in path.parents or not path.exists() or not path.is_file():
+    # Serve only a file recorded in this project's own generation history, and
+    # only from inside that project's workspace directory. The root is derived
+    # from the shared absolute WORKSPACE_ROOT rather than re-declared here, so
+    # it cannot drift from where engines actually write generations.
+    project_root = (WORKSPACE_ROOT / "projects" / project_id).resolve()
+    try:
+        path = Path(generation.audio_path).resolve(strict=True)
+    except OSError:
+        raise HTTPException(404, "Audio not found")
+    if not path.is_relative_to(project_root) or not path.is_file():
         raise HTTPException(404, "Audio not found")
     return FileResponse(path)
 

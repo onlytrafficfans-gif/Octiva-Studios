@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
@@ -89,4 +90,22 @@ class Project(BaseModel):
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
-WORKSPACE_ROOT = Path("workspace")
+def _resolve_workspace_root() -> Path:
+    """Absolute workspace root.
+
+    This must not depend on the process working directory. Generation
+    directories are recorded as absolute paths inside project.json, and audio
+    serving re-derives the project root to constrain what may be served. If the
+    root moved with cwd, a server started from a different directory would fail
+    containment checks against generations written by an earlier run.
+
+    OCTIVA_WORKSPACE overrides the location; otherwise it is the repository's
+    own `workspace/` directory.
+    """
+    override = os.getenv("OCTIVA_WORKSPACE")
+    if override:
+        return Path(override).expanduser().resolve()
+    return (Path(__file__).resolve().parents[1] / "workspace").resolve()
+
+
+WORKSPACE_ROOT = _resolve_workspace_root()

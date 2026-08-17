@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .engines import ENGINES, EngineAdapter
-from .models import GenerationRequest
+from .models import EngineStatus, GenerationRequest
 
 
 class AutoRouter:
@@ -15,17 +15,25 @@ class AutoRouter:
                 raise RuntimeError(status.blocker or f"{engine.name} is not ready")
             return engine
 
-        ready = [engine for engine in ENGINES.values() if engine.status().state == "READY"]
+        # Snapshot every engine's status exactly once. status() performs network
+        # health checks and filesystem probes, so re-reading it per comparison
+        # both multiplies latency and lets an engine's state change midway
+        # through a single routing decision.
+        snapshot: list[tuple[EngineAdapter, EngineStatus]] = [
+            (engine, engine.status()) for engine in ENGINES.values()
+        ]
+
+        ready = [(engine, status) for engine, status in snapshot if status.state == "READY"]
         if not ready:
             blockers = "; ".join(
-                f"{engine.name}: {engine.status().blocker or engine.status().state}"
-                for engine in ENGINES.values()
+                f"{engine.name}: {status.blocker or status.state}" for engine, status in snapshot
             )
             raise RuntimeError(f"No Octiva engine is READY. {blockers}")
 
         # Prefer capability fit before preference order.
-        def score(engine: EngineAdapter) -> int:
-            caps = engine.status().capabilities
+        def score(entry: tuple[EngineAdapter, EngineStatus]) -> int:
+            engine, status = entry
+            caps = status.capabilities
             value = 0
             if request.reference_audio and caps.reference_audio:
                 value += 20
@@ -41,4 +49,4 @@ class AutoRouter:
                 value += 2
             return value
 
-        return max(ready, key=score)
+        return max(ready, key=score)[0]

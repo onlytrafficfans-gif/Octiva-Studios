@@ -14,6 +14,39 @@ import requests
 from .models import EngineCapabilities, EngineStatus, GenerationRequest, GenerationResult, WORKSPACE_ROOT
 
 
+# Well-known Windows install locations for tools that ship an installer which
+# does not extend PATH. Resolving these keeps a correctly installed dependency
+# from being reported as missing, without mutating the machine's PATH.
+_FALLBACK_EXECUTABLE_DIRS: dict[str, tuple[str, ...]] = {
+    "espeak-ng": (
+        r"C:\Program Files\eSpeak NG",
+        r"C:\Program Files (x86)\eSpeak NG",
+    ),
+}
+
+
+def resolve_executable(name: str) -> str | None:
+    """Absolute path to `name`, or None if it cannot be found.
+
+    Checks an explicit OCTIVA_<NAME>_PATH override, then PATH, then known
+    installer locations. The override uses upper snake case, so `espeak-ng`
+    is configured via OCTIVA_ESPEAK_NG_PATH.
+    """
+    override = os.getenv(f"OCTIVA_{name.upper().replace('-', '_')}_PATH")
+    if override and Path(override).is_file():
+        return str(Path(override).resolve())
+
+    found = shutil.which(name)
+    if found:
+        return str(Path(found).resolve())
+
+    for directory in _FALLBACK_EXECUTABLE_DIRS.get(name, ()):
+        candidate = Path(directory) / f"{name}.exe"
+        if candidate.is_file():
+            return str(candidate.resolve())
+    return None
+
+
 class EngineAdapter(ABC):
     id: str
     name: str
@@ -75,7 +108,9 @@ class CommandEngineAdapter(EngineAdapter):
             blocker = f"Set {self.command_env} to the verified native wrapper command."
         else:
             missing_envs = [key for key in self.required_envs if not os.getenv(key)]
-            missing_bins = [name for name in self.required_executables if shutil.which(name) is None]
+            missing_bins = [
+                name for name in self.required_executables if resolve_executable(name) is None
+            ]
             if missing_envs:
                 state = "MISSING_MODEL"
                 blocker = "Missing required configuration: " + ", ".join(missing_envs)
@@ -88,8 +123,15 @@ class CommandEngineAdapter(EngineAdapter):
                     state = "OFFLINE"
                     blocker = f"{self.health_url_env} is not configured."
                 else:
+                    # A native engine legitimately blocks its request thread while
+                    # downloading weights on first run or while a generation is in
+                    # flight. A short timeout would report a live engine as OFFLINE
+                    # and make generate()/AUTO refuse valid work.
+                    health_timeout = float(os.getenv("OCTIVA_HEALTH_TIMEOUT", "15"))
                     try:
-                        response = requests.get(f"{base}{self.health_path}", timeout=2)
+                        response = requests.get(
+                            f"{base}{self.health_path}", timeout=health_timeout
+                        )
                         if response.status_code >= 400:
                             raise RuntimeError(f"HTTP {response.status_code}")
                     except Exception as exc:
@@ -126,6 +168,20 @@ class CommandEngineAdapter(EngineAdapter):
             "OCTIVA_OUTPUT_DIR": str(run_dir.resolve()),
             "OCTIVA_RESULT": str(result_path.resolve()),
         })
+        # Make required tools reachable by the wrapper even when their installer
+        # did not extend PATH. phonemizer additionally needs the espeak-ng shared
+        # library located explicitly on Windows.
+        for name in self.required_executables:
+            resolved = resolve_executable(name)
+            if not resolved:
+                continue
+            bin_dir = str(Path(resolved).parent)
+            if bin_dir not in env.get("PATH", ""):
+                env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
+            if name == "espeak-ng" and not env.get("PHONEMIZER_ESPEAK_LIBRARY"):
+                dll = Path(resolved).parent / "libespeak-ng.dll"
+                if dll.is_file():
+                    env["PHONEMIZER_ESPEAK_LIBRARY"] = str(dll)
         completed = subprocess.run(
             command,
             cwd=self.repo,
