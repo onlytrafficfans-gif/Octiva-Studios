@@ -1,0 +1,35 @@
+﻿{
+    "timestamp":  "2026-08-14T04:55:38.3595542-07:00",
+    "os":  {
+               "Caption":  "Microsoft Windows 11 Home",
+               "Version":  "10.0.26200",
+               "OSArchitecture":  "64-bit"
+           },
+    "cpu":  {
+                "Name":  "AMD Ryzen 5 5600X 6-Core Processor             ",
+                "NumberOfCores":  6,
+                "NumberOfLogicalProcessors":  12
+            },
+    "ram_gb":  31.93,
+    "gpu":  [
+                {
+                    "Name":  "AMD Radeon RX 6700 XT",
+                    "DriverVersion":  "32.0.21045.1000",
+                    "AdapterRAM_GB":  4
+                }
+            ],
+    "python":  [
+                   " -V:3.14 *        C:\\Program Files\\Python314\\python.exe",
+                   " -V:3.12          C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+                   " -V:3.10          C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\python.exe",
+                   " -V:Astral/CPython3.11.15 C:\\Users\\user\\AppData\\Roaming\\uv\\python\\cpython-3.11.15-windows-x86_64-none\\python.exe"
+               ],
+    "git":  "git version 2.54.0.windows.1",
+    "disk":  [
+                 {
+                     "Name":  "C",
+                     "FreeGB":  50.72,
+                     "UsedGB":  901.67
+                 }
+             ]
+}
